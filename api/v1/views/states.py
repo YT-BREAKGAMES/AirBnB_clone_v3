@@ -1,73 +1,74 @@
 #!/usr/bin/python3
-"""
-View for States that handles all RESTful API actions
+""" State APIRest
 """
 
-from flask import jsonify, request, abort
 from models import storage
 from models.state import State
 from api.v1.views import app_views
+from flask import jsonify, abort, request
 
 
-@app_views.route('/states', methods=['GET'], strict_slashes=False)
-def states_all():
-    """ returns list of all State objects """
-    states_all = []
-    states = storage.all("State").values()
-    for state in states:
-        states_all.append(state.to_json())
-    return jsonify(states_all)
+@app_views.route('/states', methods=['GET'])
+def list_dict():
+    """ list of an objetc in a dict form
+    """
+    lista = []
+    dic = storage.all('State')
+    for elem in dic:
+        lista.append(dic[elem].to_dict())
+    return (jsonify(lista))
 
 
-@app_views.route('/states/<state_id>', methods=['GET'])
-def state_get(state_id):
-    """ handles GET method """
-    state = storage.get("State", state_id)
-    if state is None:
-        abort(404)
-    state = state.to_json()
-    return jsonify(state)
+@app_views.route('/states/<state_id>', methods=['GET', 'DELETE'])
+def state_id(state_id):
+    """ realize the specific action depending on method
+    """
+    lista = []
+    dic = storage.all('State')
+    for elem in dic:
+        var = dic[elem].to_dict()
+        if var["id"] == state_id:
+            if request.method == 'GET':
+                return (jsonify(var))
+            elif request.method == 'DELETE':
+                aux = {}
+                dic[elem].delete()
+                storage.save()
+                return (jsonify(aux))
+    abort(404)
 
 
-@app_views.route('/states/<state_id>', methods=['DELETE'])
-def state_delete(state_id):
-    """ handles DELETE method """
-    empty_dict = {}
-    state = storage.get("State", state_id)
-    if state is None:
-        abort(404)
-    storage.delete(state)
-    storage.save()
-    return jsonify(empty_dict), 200
-
-
-@app_views.route('/states', methods=['POST'], strict_slashes=False)
-def state_post():
-    """ handles POST method """
-    data = request.get_json()
-    if data is None:
-        abort(400, "Not a JSON")
-    if 'name' not in data:
-        abort(400, "Missing name")
-    state = State(**data)
-    state.save()
-    state = state.to_json()
-    return jsonify(state), 201
+@app_views.route('/states', methods=['POST'])
+def add_item():
+    """ add a new item
+    """
+    if not request.json:
+        return jsonify("Not a JSON"), 400
+    else:
+        content = request.get_json()
+        if "name" not in content.keys():
+            return jsonify("Missing name"), 400
+        else:
+            new_state = State(**content)
+            new_state.save()
+            return (jsonify(new_state.to_dict()), 201)
 
 
 @app_views.route('/states/<state_id>', methods=['PUT'])
-def state_put(state_id):
-    """ handles PUT method """
-    state = storage.get("State", state_id)
-    if state is None:
-        abort(404)
-    data = request.get_json()
-    if data is None:
-        abort(400, "Not a JSON")
-    for key, value in data.items():
-        ignore_keys = ["id", "created_at", "updated_at"]
-        if key not in ignore_keys:
-            state.bm_update(key, value)
-    state.save()
-    state = state.to_json()
-    return jsonify(state), 200
+def update_item(state_id):
+    """ update item
+    """
+    dic = storage.all("State")
+    for key in dic:
+        if dic[key].id == state_id:
+            if not request.json:
+                return jsonify("Not a JSON"), 400
+            else:
+                forbidden = ["id", "update_at", "created_at"]
+                content = request.get_json()
+                for k in content:
+                    if k not in forbidden:
+                        setattr(dic[key], k, content[k])
+                dic[key].save()
+                return(jsonify(dic[key].to_dict()))
+    abort(404)

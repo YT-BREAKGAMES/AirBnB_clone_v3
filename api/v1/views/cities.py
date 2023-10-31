@@ -1,83 +1,91 @@
 #!/usr/bin/python3
-"""
-View for Cities that handles all RESTful API actions
+""" City APIRest
+ careful by default it uses get method
 """
 
-from flask import jsonify, request, abort
 from models import storage
+from models.state import State
 from models.city import City
 from api.v1.views import app_views
+from flask import jsonify, abort, request
 
 
-@app_views.route('/states/<state_id>/cities', methods=['GET'],
-                 strict_slashes=False)
-def cities_all(state_id):
-    """ returns list of all City objects linked to a given State """
-    state = storage.get("State", state_id)
-    if state is None:
-        abort(404)
-    cities_all = []
-    cities = storage.all("City").values()
-    for city in cities:
-        if city.state_id == state_id:
-            cities_all.append(city.to_json())
-    return jsonify(cities_all)
+@app_views.route('/states/<state_id>/cities', methods=['GET'])
+def list_cities(state_id):
+    """ list all cities from a specified state
+    """
+    lista = []
+    dic = storage.all('State')
+    for key in dic:
+        if state_id == dic[key].id:
+            cities = dic[key].cities
+            for elem in cities:
+                lista.append(elem.to_dict())
+            return (jsonify(lista))
+    abort(404)
 
 
 @app_views.route('/cities/<city_id>', methods=['GET'])
-def city_get(city_id):
-    """ handles GET method """
-    city = storage.get("City", city_id)
-    if city is None:
-        abort(404)
-    city = city.to_json()
-    return jsonify(city)
+def city_id(city_id):
+    """ return the city
+    """
+    dic = storage.all('City')
+    for key in dic:
+        if city_id == dic[key].id:
+            return (jsonify(dic[key].to_dict()))
+    abort(404)
 
 
 @app_views.route('/cities/<city_id>', methods=['DELETE'])
 def city_delete(city_id):
-    """ handles DELETE method """
-    empty_dict = {}
-    city = storage.get("City", city_id)
-    if city is None:
-        abort(404)
-    storage.delete(city)
-    storage.save()
-    return jsonify(empty_dict), 200
+    """ delete the delete
+    """
+    dic = storage.all('City')
+    for key in dic:
+        if city_id == dic[key].id:
+            dic[key].delete()
+            storage.save()
+            return (jsonify({}))
+    abort(404)
 
 
-@app_views.route('/states/<state_id>/cities', methods=['POST'],
-                 strict_slashes=False)
-def city_post(state_id):
-    """ handles POST method """
-    state = storage.get("State", state_id)
-    if state is None:
-        abort(404)
-    data = request.get_json()
-    if data is None:
-        abort(400, "Not a JSON")
-    if 'name' not in data:
-        abort(400, "Missing name")
-    city = City(**data)
-    city.state_id = state_id
-    city.save()
-    city = city.to_json()
-    return jsonify(city), 201
+@app_views.route('/states/<state_id>/cities', methods=['POST'])
+def add_city(state_id):
+    """ create a city of a specified state
+    """
+    lista = []
+    dic = storage.all('State')
+    for key in dic:
+        if state_id == dic[key].id:
+            content = request.get_json()
+            if not request.json:
+                return (jsonify("Not a JSON"), 400)
+            else:
+                if "name" not in content.keys():
+                    return (jsonify("Missing name"), 400)
+                else:
+                    content["state_id"] = state_id
+                    new_city = City(**content)
+                    new_city.save()
+                    return jsonify(new_city.to_dict()), 201
+    abort(404)
 
 
 @app_views.route('/cities/<city_id>', methods=['PUT'])
-def city_put(city_id):
-    """ handles PUT method """
-    city = storage.get("City", city_id)
-    if city is None:
-        abort(404)
-    data = request.get_json()
-    if data is None:
-        abort(400, "Not a JSON")
-    for key, value in data.items():
-        ignore_keys = ["id", "created_at", "updated_at"]
-        if key not in ignore_keys:
-            city.bm_update(key, value)
-    city.save()
-    city = city.to_json()
-    return jsonify(city), 200
+def update_city(city_id):
+    """ update specified city
+    """
+    dic = storage.all('City')
+    for key in dic:
+        if city_id == dic[key].id:
+            if not request.json:
+                return (jsonify("Not a JSON"), 400)
+            else:
+                forbidden = ["id", "update_at", "created_at", "state_id"]
+                content = request.get_json()
+                for k in content:
+                    if k not in forbidden:
+                        setattr(dic[key], k, content[k])
+                dic[key].save()
+                return jsonify(dic[key].to_dict())
+    abort(404)
